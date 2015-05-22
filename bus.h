@@ -23,6 +23,7 @@ char** ARGV;
 int* ARGC;
 
 static unsigned char SIG_EXTENDED;
+static unsigned int  SIG_FEISTY;
 static volatile char SIG_LOCK;
 static volatile char SIG_ACQUIRE;
 
@@ -531,6 +532,8 @@ seqmeta_t* seqTok(seqmeta_t* container, char* first, char* last, char* delim, un
 	if(first == NULL) first=old_s; // means we should proceed on previous string
 	if(first == last) return NULL;
 	
+	//printf("SEQTOK] :: Delimiter[%d]='%s', STRING: '%s'\n", delimlength, delim, first);
+	
 	container->address = first;
 	
 	while(first < last){
@@ -874,6 +877,8 @@ void initHelpPage(){
 					  Default is 1.0 (float, delimited by point [not comma])\n\
 		ExtendedSigHandler	- enables extended signal handler [in some rare cases might cause glitches or stack overfill].\n\
 					  By default it's enabled. Possible config values: [yes|no] (lowercase)\n\
+		Feisty         		- If ExtendedSigHandler is enabled, BUS can act feisty. If any process tries to send a signal to BUS, that process will be sent a signal, \n\
+					  specified as 'Feisty' value (integer)\n\
 		\n\n";
 			
 	help.LOADED = 1;
@@ -1197,9 +1202,13 @@ void SIGHANDLER(int sig, siginfo_t* info, void* nil){
 				info->si_signo, info->si_pid, bus.EMERG_BUFF, info->si_uid, info->si_fd, info->si_addr);
 		LOG(bus.logMSG);
 		
+		if(SIG_FEISTY && info->si_pid){
+			kill(info->si_pid, SIG_FEISTY);
+		}
+		
 		memset(bus.logMSG, 0, LOG_MSG_LENGTH);
 		memset(bus.EMERG_BUFF, 0, bus.EMERG_BUFF_SZ);
-
+		
 		
 		SIG_ACQUIRE = 0;
 		SIG_LOCK = 0;
@@ -1388,7 +1397,7 @@ int interpretConfig(char* confFile){
 			//int x=0; while(x<LINE->length){ printf("LINE_CHAR[%d]{%p} = '%c'(%d)\n", x, LINE->address+x, LINE->address[x], LINE->address[x]); x=x+1;} // DEBUG
 			LINE->address = strTrim(LINE->address);
 			
-			if(LINE->address[0] == '#' || (LINE->address[0] == '/' && LINE->address[0] != '\0' && LINE->address[1] == '/')){ // commented-out line
+			if(LINE->address[0] == '\0' || LINE->address[0] == '#' || (LINE->address[0] == '/' && LINE->address[1] == '/')){ // commented-out line
 				// lose the rest of the LINE
 				seqTok_r(LINE, NULL, buffer+bytes_read-1, "\0", 1, tempTokenLine);
 				continue;
@@ -1473,6 +1482,12 @@ int interpretConfig(char* confFile){
 				if (strcmp(value, "no") == 0){
 					SIG_EXTENDED = 0;
 				}
+				
+			} else
+			if(strcmp(substr, "Feisty") == 0 && value){
+				sprintf(bus.logMSG, "CONFIG :: Setting Feistiness '%s'\n", value); LOG(bus.logMSG);
+				
+				SIG_FEISTY = strToInt(value);
 				
 			} else
 			if(strcmp(substr, "Daemon") == 0){
@@ -1611,6 +1626,7 @@ void argsParser(int argc, char** argv, args_t* free_args, args_t* pair_args, arg
 
 void interpretArgs(args_t* pairArgs, args_t* flagArgs, args_t* freeArgs){
 	int i;
+	
 	//char* msg = (char*)malloc(sizeof(char)*MAX_LOG_MSG_LENGTH);
 	
 	// getting pairs first
@@ -1704,6 +1720,7 @@ void interpretArgs(args_t* pairArgs, args_t* flagArgs, args_t* freeArgs){
 	}
 
 	for(i=0; i<flagArgs->elements_ct; i=i+1){
+		
 		memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 		//printf("flagArg[%d]: %s\n", i, (char*)flagArgs->elements[i]);
 		if(strcmp(flagArgs->elements[i], "-h") == 0){
@@ -1716,12 +1733,13 @@ void interpretArgs(args_t* pairArgs, args_t* flagArgs, args_t* freeArgs){
 			F.DAEMON = 1;
 		}
 		else {
-			sprintf(bus.logMSG, "ARGS[flag] :: Unknown flag: '%s'\n", pairArgs->elements[i]); LOG(bus.logMSG);
+			sprintf(bus.logMSG, "ARGS[flag] :: Unknown flag: '%s'\n", flagArgs->elements[i]); LOG(bus.logMSG);
 		}
 
 	}
 
 	for(i=0; i<freeArgs->elements_ct; i=i+1){
+		
 		memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 		sprintf(bus.logMSG, "ARGS[free] :: Free arg detected: '%s'\n", freeArgs->elements[i]); LOG(bus.logMSG);
 		//printf("freeArg[%d]: %s\n", i, (char*)freeArgs->elements[i]);

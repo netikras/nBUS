@@ -123,12 +123,12 @@ void Listener(){
 		nfds = bus.fd_io+1;
 		
 		
-		//printf("fd_io=%d, rfds=%d\n", bus.fd_io, rfds);
+		
 		selected = select(nfds, &rfds, NULL, NULL, &timeout);
 		
 		if(selected == -1) LOG("LISTENER :: select() interrupted [-1]\n");
 		else if(selected) {
-			//printf("selected!\n");
+			
 			if(FD_ISSET(bus.fd_io, &rfds)){
 				
 				
@@ -138,7 +138,7 @@ void Listener(){
 				streamParser(bus._stream, stream_length, NULL, 0);
 				
 				memSet(bus._stream, 0, bus.readBuffSz);
-				//free(stream); stream = NULL;
+				
 			}
 		}
 		//else printf("Timeout...\n");
@@ -146,8 +146,6 @@ void Listener(){
 		
 	}
 	
-	//free(mesg);
-	//free(stream);
 	LEAVE(0);
 }
 
@@ -168,8 +166,7 @@ buck_t* parseModesEXT(buck_t* b){ // returns parsed mode and alters loc if requi
 	
 	char* tempStr = NULL;
 	
-	//char* msg = NULL;
-	//int i=0;
+	
 	unsigned int flushAfter = 0;
 	unsigned int multipl = 1;
 	
@@ -178,11 +175,12 @@ buck_t* parseModesEXT(buck_t* b){ // returns parsed mode and alters loc if requi
 	seqmeta_t* LOCSEQ  = malloc(sizeof(seqmeta_t)); seqmeta_t* LOCSEQ_orig  = LOCSEQ;
 	seqmeta_t* portSEQ = malloc(sizeof(seqmeta_t)); seqmeta_t* portSEQ_orig = portSEQ;
 	
+	
 	MODSEQ->address  = NULL;
 	LOCSEQ->address  = NULL;
 	portSEQ->address = NULL;
 	
-	//msg = malloc(LOG_MSG_LENGTH);
+	
 	memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 	
 	seqTok(MODSEQ, b->loc, b->loc + b->locLen, field_delimiter_2, strLength(field_delimiter_2));
@@ -318,9 +316,12 @@ buck_t* parseModesEXT(buck_t* b){ // returns parsed mode and alters loc if requi
 		}
 		
 		if(!(MODE & F_MODE_FILE_ABNORMAL) && findChar(b->loc, ':') > -1 ){ // NETWORK SOCKET
-		//printf("÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷\n");
-			seqTok(NULL, b->loc, b->loc + b->locLen, ":", 1); // location
-
+			//printf("÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷\n");
+			//printf("÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷÷\n");
+			//printf("LOC[%d]='%s'\n", b->locLen, b->loc);
+			seqmeta_t* null = malloc(sizeof(seqmeta_t)); 
+			seqTok(null, b->loc, b->loc + b->locLen, ":", 1); // location
+			free(null);
 			seqTok(portSEQ, NULL, b->loc + b->locLen, ":", 1);
 			if(portSEQ && portSEQ->address){
 				free(tempStr); tempStr=NULL;
@@ -372,20 +373,20 @@ int streamParser(char* stream, int length, char* delim, int delimLen){
 	} else tempDelim = delim;
 	
 	int tokCount = 0;
-	//char* log_msg = malloc(sizeof(char)*LOG_MSG_LENGTH);
+	
 	memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 	seqmeta_t* TOKEN = malloc(sizeof(seqmeta_t)); TOKEN->address = NULL;
 	seqmeta_t* pieces[query_token_ct];
 	
 	
 	
-	seqTok(TOKEN, stream, stream+bus.readBuffSz, tempDelim, bus.qDelimLength);
+	seqTok(TOKEN, stream, stream+bus.readBuffSz, tempDelim, delimLen);
 
 	while(TOKEN->address != NULL && tokCount < query_token_ct){
 		pieces[tokCount] = TOKEN;
 		tokCount = tokCount + 1;
 		TOKEN = malloc(sizeof(seqmeta_t)); TOKEN->address = NULL;
-		seqTok(TOKEN, NULL, stream+bus.readBuffSz, tempDelim, bus.qDelimLength);
+		seqTok(TOKEN, NULL, stream+bus.readBuffSz, tempDelim, delimLen);
 	}
 	
 	if(tokCount != query_token_ct){
@@ -402,7 +403,7 @@ int streamParser(char* stream, int length, char* delim, int delimLen){
 		free(tempStr); tempStr = NULL;
 		tempStr = strNullTerm(pieces[tok_field_lbl]->address, pieces[tok_field_lbl]->length);
 		
-		sprintf(bus.logMSG, "Adding label: '%s'\n", tempStr);
+		sprintf(bus.logMSG, "Adding label: '%s'\n", tempStr[0] == '*'?"***":tempStr);
 		LOG(bus.logMSG);
 		memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 		
@@ -512,7 +513,7 @@ int streamParser(char* stream, int length, char* delim, int delimLen){
 		
 		tempStr = strNullTerm(pieces[tok_field_lbl]->address, pieces[tok_field_lbl]->length);
 
-		sprintf(bus.logMSG, "Retrieving label: '%s'\n", tempStr);
+		sprintf(bus.logMSG, "Retrieving label: '%s'\n", tempStr[0] == '*'?"***":tempStr);
 		LOG(bus.logMSG);
 		memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 
@@ -530,7 +531,7 @@ int streamParser(char* stream, int length, char* delim, int delimLen){
 		free(tempStr); tempStr = NULL;
 		tempStr = strNullTerm(pieces[tok_field_lbl]->address, pieces[tok_field_lbl]->length);
 		
-		sprintf(bus.logMSG, "Deleting label: '%s'\n", tempStr);
+		sprintf(bus.logMSG, "Deleting label: '%s'\n", tempStr[0] == '*'?"***":tempStr);
 		LOG(bus.logMSG);
 		memSet(bus.logMSG, 0, LOG_MSG_LENGTH);
 		switch(bucketDelByLabel(bucket, pieces[tok_field_lbl] ) ){
@@ -564,7 +565,6 @@ int streamParser(char* stream, int length, char* delim, int delimLen){
 	}
 	
 	free(TOKEN);
-	//free(log_msg);
 	free(tempStr);
 	return 0;
 }
@@ -584,10 +584,9 @@ int interpretINITfile(char* path){
 	int size = 0;
 	
 	char* buffer = NULL;
-	//char* msg    = NULL;
+	
 	int bytes_read = 0;
 	
-	//msg = malloc(sizeof(char)*LOG_MSG_LENGTH);
 	memSet(bus.logMSG, 0, size);
 	
 	sprintf(bus.logMSG, "Loading configuration file: '%s'\n", path);
@@ -646,7 +645,7 @@ int interpretINITfile(char* path){
 		while(LINE->address){
 			LINE->address = strTrim(LINE->address);
 			
-			if(LINE->address[0] == '#' || (LINE->address[0] == '/' && LINE->address[0] != '\0' && LINE->address[1] == '/')){ // commented-out line
+			if(LINE->address[0] == '\0' || LINE->address[0] == '#' || (LINE->address[0] == '/' && LINE->address[1] == '/')){ // commented-out or empty line
 				// lose the rest of the LINE
 				seqTok_r(LINE, NULL, buffer+bytes_read-1, "\0", 1, tempTokenLine);
 				continue;
@@ -674,9 +673,11 @@ int interpretINITfile(char* path){
 				tempDelimLen = strLength(str_right);
 				tempDelim = malloc(tempDelimLen);
 				memcpy(tempDelim, str_right, tempDelimLen);
+				//printf("Delimiter loaded: '%s'\n", tempDelim);
 				
 			} else
 			if(str_left){
+				//printf("Sending to parse: '%s'\n", str_left);
 				streamParser(str_left, strLength(str_left)-1, tempDelim, tempDelimLen);
 				
 			}
@@ -690,7 +691,7 @@ int interpretINITfile(char* path){
 	
 	free(LINE_orig);
 	free(buffer);
-	//free(msg);
+	
 	if(tempDelim) free(tempDelim);
 	free(tempToken);
 	free(tempTokenLine);
