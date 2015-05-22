@@ -769,7 +769,7 @@ void initHelpPage(){
 	help.SHORT = "\n\
  Please specify which topic you're interested in. Available topics:\n\
 	 short  - this message\n\
-	 info   - general information abaout the BUS\n\
+	 info   - general information about the BUS\n\
 	 usage  - basic usage-related information\n\
 	 params - CLI parameters with brief explanation\n\
 	 conf   - information about configuration file, available entries\n\
@@ -782,7 +782,7 @@ void initHelpPage(){
 		* Daemon   -- will run in background and completely detatch from cTTY; \n\
 		* Terminal -- will run on active terminal and will be possible to terminate by keyboard. \n\
 	 By default BUS runs in Terminal mode. All the output will be redirected to STDERR. \n\n\
-	 To start the BUS one must specify at least management file path. This must be a pipe-file. Other processes will be able to store, retrieve and remove data from the BUS by communicating to it via this file. \
+	 To start the BUS one must specify at least Listener file path. This must be a pipe-file. Other processes will be able to store, retrieve and remove data from the BUS by communicating to it via this file. \
 	 \n\n";
 	 
 	 help.USAGE = "\
@@ -796,12 +796,13 @@ void initHelpPage(){
 	del - removes data from the BUS\n\
 	die - terminates the BUS\n\
  * LABEL - a label to be assigned to the DATA. All labels must be unique. \n\
+		If an asterisk ('*') is the first symbol of the label, label name will be hidden in logs.\n\
  * DATA - the actual data to be stored in a BUS\n\
 	DATA can be dynamic. There are a few DATA field tags that allow DYNAMIC data:\n\
 		* [stdin]  --  will allow user to enter data via stdin, unless BUS is running in DAEMON mode (w/o terminal);\n\
 		* [stdin+secret] -- will ask user to enter data just like with '[stdin]' tag, except data will not appear on screen (just like when entering passwords);\n\
 		* [file]/somedir/somefile -- will load data from file. Make sure to set a buffer big enough to fit all the data required. Read delay (-B) should be also considered for bigger files or slower systems.\n\
- * TRANSFER METHOD - how the data will be retrieved from BUS: FILE, SOCK, MMAP. \n\
+ * TRANSFER METHOD - how the data will be retrieved from BUS: FILE, SOCK, (disabled)MMAP. \n\
  * TRANSFER MODE - Optional. By default data will be transfered to a normal file and left there. MODE can be a combination of one or more values listed below:\n\
 	FileMode:\n\
 		C - create file if it does not exist yet \n\
@@ -810,11 +811,7 @@ void initHelpPage(){
 		X - exclusive file mode, i.e. file MUST not be there when transfering data.\n\
 	FileType:\n\
 		N - normal file (default); \n\
-		P - pipe file (should be set with timeout).\n\
-	Timeout (i.e. how soon data will be removed from the location):\n\
-		0 - no timeout (default);\n\
-		positive number - number of seconds after which file will be removed;\n\
-		negative number - number of seconds after which file will be emptied.\n\
+		P - pipe file.\n\
 	\n\
 	SocketMode:\n\
 		C - Client socket\n\
@@ -822,12 +819,17 @@ void initHelpPage(){
 		(disabled) A - Pick between client/server automatically\n\
 		\n\
 		N - Network socket\n\
-		P - pipe-file socket\n\
-		H - Hidden socket (aplies for pipe-file sockets)\n\
+		P - UNIX socket (AF_UNIX)\n\
+		H - Hidden (abstract) UNIX socket\n\
 		_______\n\
 		I - Immediate mode. Useful for pipes, sockets and other blocking mechanizms. If data has been flushed before timeout, LOCATION will be housekept (deleted/drained&closed) immediatelly.\n\
- Mode must be separated from LOCATION by a double colon ('::'). If mode is not provided then colon separation is not required.\n\
- * LOCATION - location to where data will be transfered. Currently only file paths are available (though in future modifications support for sockets and shm might be added).\n\
+		\n\n\
+		Timeout (i.e. how soon data will be removed from the location):\n\
+		0 - no timeout (default);\n\
+		positive number - number of seconds after which file will be removed;\n\
+		negative number - number of seconds after which file will be emptied.\n\n\
+		Mode must be separated from LOCATION by a double colon ('::'). If mode is not provided then colon separation is not required.\n\n\
+ * LOCATION - location to where data will be transfered.\n\
 	The following DATA transfer types are supported:\n\
 		* normal file;\n\
 		* pipe-file;\n\
@@ -836,18 +838,17 @@ void initHelpPage(){
 		* network socket - TCP (client/server) (location = [adress]:[port]).\n\n\
  EXAMPLE:\n\
 	add$MyLabel1$this is some random data$FILE$CNA-15::/tmp/outputFile	\n\n\
-	this query will add new data entry with label 'Label1' and set it to be pushed to the end of a file on /tmp (create the file if it's not there). \n\
+	Once written to Listener file this query will add new data entry with label 'Label1' and set it to be pushed to the end of a file on /tmp (create the file if it's not there). \n\
 	After 15 seconds since 'get' query is sent the file will be wiped.\n\
-	Only the owner of process 1234 will be able to manipulate this data.\
 	 \n\n";
 	
 	help.PARAMS = "\
 	 \nCLI PARAMETERS:\n\
 	The following parameters can be passed to the BUS:\n\
-	-i, --iofile     [path] 		- the management file through which the BUS can be communicated. MANDATORY!\n\
-	-c, --config     [path] 		- path to configuration file\n\
-	-I, --initFile	 [path] 		- path to file containing initial values that should be loaded to BUS on startup\n\
-	-l, --log        [path] 		- path to LOG file. Defaults: daemon -- /dev/null; shell -- STDERR\n\
+	-i, --iofile     [path] 	- the Listener file through which the BUS can be communicated. MANDATORY!\n\
+	-c, --config     [path] 	- path to configuration file\n\
+	-I, --initFile	 [path] 	- path to file containing initial values that should be loaded to BUS on startup\n\
+	-l, --log        [path] 	- path to LOG file. Defaults: daemon -- /dev/null; shell -- STDERR\n\
 	-d, --daemon    		- to daemonize the BUS\n\
 	-D, --delimiter  [sequence] 	- delimiter for query strings\n\
 	-t, --ttd        [seconds] 	- time until script death (divisible by -T)\n\
@@ -865,20 +866,21 @@ void initHelpPage(){
 	Valid configuration entries look as follows:\n\
 		VARIABLE = VALUE\n\n\
 	Available variables:\n\
+		Daemon         		- (FLAG - this does not need value to be assigned) enables DAEMON mode\n\
 		Delimiter      		- separator for distinct fields of a query. Default is 01\n\
 		InitFile        	- path to file containing initial queries. These queries will be loaded during start-up of the BUS\n\
 		ListenerFile   		- path to management file\n\
 		LogFile        		- path to log file. Defaults: daemon - /dev/null; shell - stderr\n\
-		TTD            		- TimeTillDeath. After this many seconds BUS will die. Value should be divisible by ListenTimeout\n\
+		TTD(disabled)  		- TimeTillDeath. After this many seconds BUS will die. Value should be divisible by ListenTimeout\n\
 		ListenTimeout  		- after this many seconds listening on mgmt file will be re-iterated. You don't normally need this value to be big. Default is 10\n\
 		ReadBufferSize 		- Size of buffer filled by mgmt file. Longest estimated query should be shorted than the buffer size.\n\
 		ReadBufferDelay		- Delay in seconds to allow read query buffer to fill-up before flushing it. Bigger data chunks might need longer delays. Def.: 0.5\n\
 		WatchDogClockRate 	- determines how often watchdog will check BUS integrity. Higher values will cause higher CPU usage. \n\
-					  Default is 1.0 (float, delimited by point [not comma])\n\
+						Default is 1.0 (float, delimited by point [not comma])\n\
 		ExtendedSigHandler	- enables extended signal handler [in some rare cases might cause glitches or stack overfill].\n\
-					  By default it's enabled. Possible config values: [yes|no] (lowercase)\n\
+						By default it's enabled. Possible config values: [yes|no] (lowercase)\n\
 		Feisty         		- If ExtendedSigHandler is enabled, BUS can act feisty. If any process tries to send a signal to BUS, that process will be sent a signal, \n\
-					  specified as 'Feisty' value (integer)\n\
+						specified as 'Feisty' value (integer)\n\
 		\n\n";
 			
 	help.LOADED = 1;
